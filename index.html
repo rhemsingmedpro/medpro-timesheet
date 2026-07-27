@@ -486,8 +486,16 @@ function updateOnCallEnabled(){
     onCallStartConfirm.classList.remove('show');
   }
 }
-onCallStandardEl.addEventListener('change', updateOnCallEnabled);
-onCallStatEl.addEventListener('change', updateOnCallEnabled);
+// Behaves like a radio button (only one can be selected) but each box can
+// still be clicked again to deselect it, unlike a true radio input.
+onCallStandardEl.addEventListener('change', () => {
+  if(onCallStandardEl.checked) onCallStatEl.checked = false;
+  updateOnCallEnabled();
+});
+onCallStatEl.addEventListener('change', () => {
+  if(onCallStatEl.checked) onCallStandardEl.checked = false;
+  updateOnCallEnabled();
+});
 updateOnCallEnabled();
 
 onCallStartEl.addEventListener('change', () => {
@@ -721,9 +729,16 @@ function buildTimesheetPDF(data){
   y += 30;
 
   if(data.onCallStandard || data.onCallStat){
-    label('On-Call Week', marginX, y);
     const kind = data.onCallStandard ? 'Standard' : 'Stat';
-    value(`${kind}: ${data.onCallStart || '—'} to ${data.onCallEnd || '—'}`, marginX, y);
+    // Highlighted banner so on-call status is impossible to miss on the page.
+    doc.setFillColor(255, 244, 214);
+    doc.setDrawColor(230, 168, 55);
+    doc.roundedRect(marginX, y-14, usableWidth, 26, 3, 3, 'FD');
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(11);
+    doc.setTextColor(150, 95, 10);
+    doc.text(`ON-CALL WEEK — ${kind.toUpperCase()}: ${data.onCallStart || '—'} to ${data.onCallEnd || '—'}`, marginX+8, y+2);
+    doc.setTextColor(28,39,51);
     y += 30;
   }
 
@@ -815,19 +830,42 @@ function buildTimesheetPDF(data){
   doc.setFontSize(9.5);
   data.mileage.forEach(m=>{
     let mcx = marginX+4;
+    doc.setTextColor(28,39,51);
+    doc.setFont('helvetica','normal');
     doc.text(m.name, mcx, y); mcx += mCols[0].width;
     doc.text(m.start || '--', mcx, y); mcx += mCols[1].width;
     doc.text(m.end || '--', mcx, y); mcx += mCols[2].width;
+    // Highlight any non-zero KM entry so mileage claims stand out on the page.
+    const bus = parseFloat(m.bus) || 0;
+    const per = parseFloat(m.per) || 0;
+    if(bus > 0){ doc.setFont('helvetica','bold'); doc.setTextColor(21,58,107); } else { doc.setFont('helvetica','normal'); doc.setTextColor(28,39,51); }
     doc.text(m.bus, mcx, y); mcx += mCols[3].width;
+    if(per > 0){ doc.setFont('helvetica','bold'); doc.setTextColor(21,58,107); } else { doc.setFont('helvetica','normal'); doc.setTextColor(28,39,51); }
     doc.text(m.per, mcx, y);
+    doc.setTextColor(28,39,51);
+    doc.setFont('helvetica','normal');
     y += 16;
   });
   y += 8;
+
+  const mBusTotalNum = parseFloat(data.mBusTotal) || 0;
+  const mPerTotalNum = parseFloat(data.mPerTotal) || 0;
+  const mWeekTotalNum = parseFloat(data.mWeekTotal) || 0;
+  if(mWeekTotalNum > 0){
+    // Highlighted banner around the KM totals so mileage isn't missed.
+    doc.setFillColor(232, 243, 255);
+    doc.setDrawColor(120, 170, 220);
+    doc.roundedRect(marginX, y-13, usableWidth, 22, 3, 3, 'FD');
+  }
   doc.setFont('helvetica','bold');
   doc.setFontSize(10);
+  doc.setTextColor(mBusTotalNum > 0 ? 21 : 28, mBusTotalNum > 0 ? 58 : 39, mBusTotalNum > 0 ? 107 : 51);
   doc.text(`Business: ${data.mBusTotal} km`, marginX, y);
+  doc.setTextColor(mPerTotalNum > 0 ? 21 : 28, mPerTotalNum > 0 ? 58 : 39, mPerTotalNum > 0 ? 107 : 51);
   doc.text(`Personal: ${data.mPerTotal} km`, 200, y);
+  doc.setTextColor(mWeekTotalNum > 0 ? 21 : 28, mWeekTotalNum > 0 ? 58 : 39, mWeekTotalNum > 0 ? 107 : 51);
   doc.text(`Week Total: ${data.mWeekTotal} km`, 360, y);
+  doc.setTextColor(28,39,51);
   if(data.yearTotalKm){ y += 16; doc.text(`Year Total: ${data.yearTotalKm} km`, marginX, y); }
 
   y += 30;
