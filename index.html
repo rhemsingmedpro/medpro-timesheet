@@ -179,7 +179,24 @@
     margin:-6px 0 12px;
     line-height:1.4;
   }
-  button#submitBtn{
+  .confirm-msg{
+    font-size:12.5px;
+    font-weight:700;
+    color:var(--green-dark);
+    background:#eef8ec;
+    border:1px solid #cfe9c9;
+    border-radius:6px;
+    padding:6px 9px;
+    margin:-4px 0 12px;
+    display:none;
+  }
+  .confirm-msg.show{display:block;}
+  .confirm-msg.adjusted{
+    color:var(--danger);
+    background:#fdecea;
+    border-color:#f3c6c1;
+  }
+  button#shareBtn{
     width:100%;
     padding:16px;
     font-size:16px;
@@ -190,19 +207,7 @@
     border-radius:10px;
     letter-spacing:0.3px;
   }
-  button#submitBtn:active{background:var(--green-dark);}
-  button#shareBtn{
-    width:100%;
-    padding:13px;
-    font-size:14px;
-    font-weight:600;
-    color:var(--navy);
-    background:#fff;
-    border:1.5px solid var(--navy);
-    border-radius:10px;
-    margin-top:10px;
-  }
-  button#shareBtn:active{background:var(--bg);}
+  button#shareBtn:active{background:var(--green-dark);}
   #statusMsg{
     text-align:center;
     font-size:13px;
@@ -233,6 +238,7 @@
         <label class="req">Start of Week</label>
         <input type="date" id="weekStart">
         <div class="hint" style="margin-top:-8px;">Must be a Sunday — will auto-adjust if not.</div>
+        <div class="confirm-msg" id="weekStartConfirm"></div>
       </div>
       <div>
         <label>Week Ends</label>
@@ -253,6 +259,7 @@
         <label id="onCallStartLabel">On-Call Week Start</label>
         <input type="date" id="onCallStart" disabled>
         <div class="hint" style="margin-top:-8px;">Must be a Friday — will auto-adjust if not. Select On-Call Standard or Stat above to enable.</div>
+        <div class="confirm-msg" id="onCallStartConfirm"></div>
       </div>
       <div>
         <label>On-Call Week Ends</label>
@@ -332,22 +339,20 @@
     <label>Date</label>
     <input type="date" id="submitDate">
 
-    <button id="submitBtn" type="button">Generate PDF &amp; Email via Outlook</button>
-    <button id="shareBtn" type="button" style="display:none;">Or Share PDF to an App Instead</button>
-    <div class="hint" style="margin-top:8px;">The main button saves the PDF and opens a new email — attach the saved PDF before sending. "Share" hands the PDF file directly to an app of your choice.</div>
+    <button id="shareBtn" type="button">Generate PDF</button>
+    <div class="hint" style="margin-top:8px;">This generates the PDF and opens your share sheet — choose an app to send it directly.</div>
     <div id="statusMsg"></div>
   </div>
 
   <div class="card">
     <h2>How to Send on iPhone (Outlook)</h2>
     <div class="hint" style="margin:0;">
-      1. Tap <strong>Generate PDF &amp; Email via Outlook</strong> above.<br>
-      2. The PDF downloads — tap <strong>Download</strong> at the bottom of Safari, then tap the file to confirm it saved.<br>
-      3. Switch to the <strong>Outlook</strong> app (or the mail app that opens automatically) and start a new email, or continue in the email window that opened.<br>
-      4. Tap the <strong>paperclip / attach</strong> icon in the email, choose <strong>Browse Files</strong> or <strong>Recent</strong>, and select the timesheet PDF you just saved.<br>
-      5. Fill in the recipient, check the attachment is there, and hit <strong>Send</strong>.
+      1. Tap <strong>Generate PDF</strong> above.<br>
+      2. Your share sheet opens with the PDF ready to send — scroll the app row and tap <strong>Outlook</strong>.<br>
+      3. Outlook opens a new email with the PDF already attached.<br>
+      4. Fill in the recipient, check the attachment is there, and hit <strong>Send</strong>.
     </div>
-    <div class="hint" style="margin-top:10px;">Tip: tap <strong>Or Share PDF to an App Instead</strong> to skip the download step — pick Outlook straight from the share sheet and the PDF attaches automatically; you'll just need to add the recipient yourself.</div>
+    <div class="hint" style="margin-top:10px;">Tip: if Outlook isn't visible in the share sheet row, tap <strong>More</strong> to find it, or add it as a favorite so it always shows up near the front.</div>
   </div>
 
 </main>
@@ -357,6 +362,24 @@ const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Satur
 const STANDARD_DAY = 7.5;
 const DAILY_OT_THRESHOLD = 8;
 const WEEKLY_REGULAR_CAP = 40;
+
+// Each day's "committed" regular hours are frozen once computed, and only
+// recomputed when that specific day's hours are edited — checked against the
+// current (frozen) regular hours of every OTHER day. This way, editing one
+// day's hours attributes any resulting weekly overage to that day alone,
+// without silently changing the displayed split on a different, untouched day.
+let committedReg = new Array(7).fill(0);
+let lastEditedDay = null;
+// Order in which days have been edited (most recent last) — used only to decide
+// which day gets weekly-OT capacity given BACK first if the true weekly excess
+// shrinks (e.g. another day's hours are reduced, freeing up room).
+let editHistory = [0,1,2,3,4,5,6];
+function touchDay(i){
+  lastEditedDay = i;
+  const idx = editHistory.indexOf(i);
+  if(idx > -1) editHistory.splice(idx, 1);
+  editHistory.push(i);
+}
 
 const daysContainer = document.getElementById('daysContainer');
 const mileageContainer = document.getElementById('mileageContainer');
@@ -387,6 +410,9 @@ DAYS.forEach((day, i) => {
     <textarea rows="2" id="reason${i}" placeholder="Optional"></textarea>
   `;
   daysContainer.appendChild(card);
+  // Registered here (before the generic bulk listener further down) so this
+  // fires first on every keystroke, keeping lastEditedDay current before recalc() runs.
+  document.getElementById('hours'+i).addEventListener('input', () => touchDay(i));
 
   const mCard = document.createElement('div');
   mCard.className = 'day-card';
@@ -418,24 +444,36 @@ function addDays(dateStr, days){
   d.setDate(d.getDate() + days);
   return d.toISOString().split('T')[0];
 }
+function friendlyDate(dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  return d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' });
+}
 
 const weekStartEl = document.getElementById('weekStart');
 const weekEndEl = document.getElementById('weekEnd');
+const weekStartConfirm = document.getElementById('weekStartConfirm');
 weekStartEl.addEventListener('change', () => {
   const raw = weekStartEl.value;
-  if(!raw){ weekEndEl.value = ''; return; }
+  if(!raw){ weekEndEl.value = ''; weekStartConfirm.classList.remove('show'); return; }
   const corrected = snapToWeekday(raw, 0); // Sunday
+  const wasAdjusted = corrected !== raw;
   // Defer the correction a tick so mobile native date pickers (esp. iOS Safari)
   // actually re-render the field instead of visually sticking on the tapped date.
   setTimeout(() => {
     weekStartEl.value = corrected;
     weekEndEl.value = addDays(corrected, 6); // Saturday
     weekStartEl.blur();
+    weekStartConfirm.textContent = wasAdjusted
+      ? `Adjusted to ${friendlyDate(corrected)} (the Sunday of that week) — check this is the week you meant.`
+      : `Week starts ${friendlyDate(corrected)}.`;
+    weekStartConfirm.classList.toggle('adjusted', wasAdjusted);
+    weekStartConfirm.classList.add('show');
   }, 0);
 });
 
 const onCallStartEl = document.getElementById('onCallStart');
 const onCallEndEl = document.getElementById('onCallEnd');
+const onCallStartConfirm = document.getElementById('onCallStartConfirm');
 const onCallStandardEl = document.getElementById('onCallStandard');
 const onCallStatEl = document.getElementById('onCallStat');
 
@@ -445,6 +483,7 @@ function updateOnCallEnabled(){
   if(!enabled){
     onCallStartEl.value = '';
     onCallEndEl.value = '';
+    onCallStartConfirm.classList.remove('show');
   }
 }
 onCallStandardEl.addEventListener('change', updateOnCallEnabled);
@@ -453,12 +492,18 @@ updateOnCallEnabled();
 
 onCallStartEl.addEventListener('change', () => {
   const raw = onCallStartEl.value;
-  if(!raw){ onCallEndEl.value = ''; return; }
+  if(!raw){ onCallEndEl.value = ''; onCallStartConfirm.classList.remove('show'); return; }
   const corrected = snapToWeekday(raw, 5); // Friday
+  const wasAdjusted = corrected !== raw;
   setTimeout(() => {
     onCallStartEl.value = corrected;
     onCallEndEl.value = addDays(corrected, 7); // following Friday
     onCallStartEl.blur();
+    onCallStartConfirm.textContent = wasAdjusted
+      ? `Adjusted to ${friendlyDate(corrected)} (the Friday of that week) — check this is the week you meant.`
+      : `On-call week starts ${friendlyDate(corrected)}.`;
+    onCallStartConfirm.classList.toggle('adjusted', wasAdjusted);
+    onCallStartConfirm.classList.add('show');
   }, 0);
 });
 
@@ -482,6 +527,7 @@ function updateOffDays(){
       hoursInput.placeholder = '0';
       hoursInput.value = '';
     }
+    resetCommittedReg();
     recalc();
     return;
   }
@@ -504,49 +550,85 @@ function updateOffDays(){
       hoursInput.value = STANDARD_DAY;
     }
   }
+  resetCommittedReg();
   recalc();
+}
+// A schedule change resets every day's committed regular hours back to a
+// neutral baseline (each day capped at its own daily 8-hour limit, with no
+// weekly-cap adjustment yet) since it isn't a specific day being edited.
+function resetCommittedReg(){
+  for(let i=0;i<7;i++){
+    const h = num(document.getElementById('hours'+i).value);
+    committedReg[i] = Math.min(h, DAILY_OT_THRESHOLD);
+  }
+  lastEditedDay = null;
+  editHistory = [0,1,2,3,4,5,6];
 }
 document.getElementById('workWeek').addEventListener('change', updateOffDays);
 updateOffDays();
 
 function recalc(){
-  let dailyOTs = [];
-  let dailyRegs = [];
-  let totalHours = 0;
+  // If a specific day's hours were just edited, recompute ONLY that day's
+  // committed regular hours, checked against the current (frozen) regular
+  // hours already committed for every other day.
+  if(lastEditedDay !== null){
+    const i = lastEditedDay;
+    const h = num(document.getElementById('hours'+i).value);
+    const dailyCapped = Math.min(h, DAILY_OT_THRESHOLD);
+    let othersSum = 0;
+    for(let j=0;j<7;j++){ if(j!==i) othersSum += committedReg[j]; }
+    const remainingCapacity = Math.max(0, WEEKLY_REGULAR_CAP - othersSum);
+    committedReg[i] = Math.min(dailyCapped, remainingCapacity);
+    lastEditedDay = null;
+  }
 
+  // Giveback correction: if reducing hours on some OTHER day freed up weekly
+  // capacity (the true achievable regular total is now higher than what's
+  // currently committed), return that freed capacity to whichever day(s)
+  // currently hold weekly-attributed OT — most-recently-edited first.
+  let dailyCappedArr = [];
   for(let i=0;i<7;i++){
     const h = num(document.getElementById('hours'+i).value);
-    const dOT = h > DAILY_OT_THRESHOLD ? (h - DAILY_OT_THRESHOLD) : 0;
-    const dReg = h - dOT;
-    dailyOTs.push(dOT);
-    dailyRegs.push(dReg);
-    totalHours += h;
-
-    const flag = document.getElementById('otFlag'+i);
-    if(dOT > 0) flag.classList.add('show'); else flag.classList.remove('show');
+    dailyCappedArr.push(Math.min(h, DAILY_OT_THRESHOLD));
+  }
+  const trueTotal = Math.min(dailyCappedArr.reduce((a,b)=>a+b,0), WEEKLY_REGULAR_CAP);
+  const currentTotal = committedReg.reduce((a,b)=>a+b,0);
+  let giveback = trueTotal - currentTotal;
+  if(giveback > 0){
+    for(let idx=editHistory.length-1; idx>=0 && giveback>0; idx--){
+      const day = editHistory[idx];
+      const room = dailyCappedArr[day] - committedReg[day];
+      if(room > 0){
+        const give = Math.min(room, giveback);
+        committedReg[day] += give;
+        giveback -= give;
+      }
+    }
+    // Safety net: mop up any remainder against any day still holding room,
+    // in case a day wasn't yet part of editHistory.
+    for(let day=0; day<7 && giveback>0; day++){
+      const room = dailyCappedArr[day] - committedReg[day];
+      if(room > 0){
+        const give = Math.min(room, giveback);
+        committedReg[day] += give;
+        giveback -= give;
+      }
+    }
   }
 
-  let weeklyRegTotal = dailyRegs.reduce((a,b)=>a+b,0);
-  let weeklyExcess = weeklyRegTotal > WEEKLY_REGULAR_CAP ? (weeklyRegTotal - WEEKLY_REGULAR_CAP) : 0;
-
-  // Distribute the weekly excess as OT starting from the last days worked backward,
-  // taken only from each day's regular (non-daily-OT) portion.
-  let remainingExcess = weeklyExcess;
-  for(let i=6;i>=0 && remainingExcess>0;i--){
-    const take = Math.min(dailyRegs[i], remainingExcess);
-    dailyOTs[i] += take;
-    remainingExcess -= take;
-  }
-
+  let totalHours = 0;
   let totalOT = 0;
   for(let i=0;i<7;i++){
     const h = num(document.getElementById('hours'+i).value);
-    const regHours = h - dailyOTs[i];
-    document.getElementById('ot'+i).value = dailyOTs[i] > 0 ? dailyOTs[i].toFixed(2) : (h>0 ? '0.00' : '');
-    document.getElementById('reg'+i).value = h > 0 ? regHours.toFixed(2) : '';
-    totalOT += dailyOTs[i];
-    if(dailyOTs[i] > 0) document.getElementById('otFlag'+i).classList.add('show');
-    else document.getElementById('otFlag'+i).classList.remove('show');
+    totalHours += h;
+    const reg = committedReg[i];
+    const ot = h - reg;
+    totalOT += ot;
+
+    document.getElementById('ot'+i).value = ot > 0 ? ot.toFixed(2) : (h>0 ? '0.00' : '');
+    document.getElementById('reg'+i).value = h > 0 ? reg.toFixed(2) : '';
+    const flag = document.getElementById('otFlag'+i);
+    if(ot > 0) flag.classList.add('show'); else flag.classList.remove('show');
   }
 
   document.getElementById('totalHoursOut').textContent = totalHours.toFixed(2);
@@ -831,17 +913,12 @@ function downloadBlob(blob, filename){
   setTimeout(()=>URL.revokeObjectURL(url), 4000);
 }
 
-// Show the Share button only on browsers/devices that actually support sharing files.
-if(navigator.canShare && navigator.canShare({ files:[new File([new Blob(['x'])], 'x.pdf', {type:'application/pdf'})] })){
-  document.getElementById('shareBtn').style.display = 'block';
-}
-
-document.getElementById('submitBtn').addEventListener('click', async () => {
+document.getElementById('shareBtn').addEventListener('click', async () => {
   const data = gatherTimesheetData();
   const statusMsg = document.getElementById('statusMsg');
 
   if(!data.empName || !data.weekStart || !data.weekEnd){
-    statusMsg.textContent = 'Please fill in Employee Name and Week Of before submitting.';
+    statusMsg.textContent = 'Please fill in Employee Name and Week Of before generating the PDF.';
     statusMsg.classList.add('show');
     return;
   }
@@ -850,14 +927,12 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
     await window.storage.set('empName', data.empName);
   }catch(e){}
 
-  statusMsg.textContent = 'Building PDF...';
-  statusMsg.classList.add('show');
-
   let doc;
   try{
     doc = buildTimesheetPDF(data);
   }catch(e){
     statusMsg.textContent = 'Could not generate the PDF. Please try again.';
+    statusMsg.classList.add('show');
     return;
   }
 
@@ -865,52 +940,27 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   const blob = doc.output('blob');
   const subject = `Time Sheet - ${data.empName} - Week of ${data.weekStart}`;
 
-  // Always save the PDF first — this is what gets attached manually.
-  downloadBlob(blob, filename);
+  const canShareFiles = navigator.canShare && (() => {
+    try{
+      return navigator.canShare({ files:[new File([blob], filename, { type:'application/pdf' })] });
+    }catch(e){ return false; }
+  })();
 
-  // Open a mailto: with subject/body pre-filled (no recipient — add that in the
-  // email itself). This opens whichever app is set as the device's default mail
-  // handler — set Outlook as your default mail app (in Windows/iOS/Android
-  // Settings) so this opens Outlook.
-  const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(`Hi,\n\nPlease see the attached time sheet PDF (saved as "${filename}" to your Downloads/Files) — attach it here before sending.\n\nThanks,\n${data.submittedBy}`)}`;
-  setTimeout(()=>{ window.location.href = mailto; }, 400);
-
-  statusMsg.textContent = `Saved ${filename}. Opening your default mail app — attach the file and add the recipient before sending.`;
-});
-
-document.getElementById('shareBtn').addEventListener('click', async () => {
-  const data = gatherTimesheetData();
-  const statusMsg = document.getElementById('statusMsg');
-
-  if(!data.empName || !data.weekStart || !data.weekEnd){
-    statusMsg.textContent = 'Please fill in Employee Name and Week Of before sharing.';
+  if(canShareFiles){
+    try{
+      const file = new File([blob], filename, { type:'application/pdf' });
+      await navigator.share({ files:[file], title: subject, text: subject });
+      statusMsg.textContent = 'PDF shared — pick Outlook (or your email app) and add the recipient there.';
+      statusMsg.classList.add('show');
+    }catch(e){
+      // user cancelled the share sheet — no action needed
+    }
+  }else{
+    // Desktop browsers (and some mobile browsers) don't support sharing files —
+    // fall back to a plain download.
+    downloadBlob(blob, filename);
+    statusMsg.textContent = `Saved ${filename} — attach it to an email yourself.`;
     statusMsg.classList.add('show');
-    return;
-  }
-
-  let doc;
-  try{
-    doc = buildTimesheetPDF(data);
-  }catch(e){
-    statusMsg.textContent = 'Could not generate the PDF. Please try again.';
-    return;
-  }
-
-  const filename = `Timesheet_${data.empName.replace(/\s+/g,'_')}_${data.weekStart}.pdf`;
-  const blob = doc.output('blob');
-  const subject = `Time Sheet - ${data.empName} - Week of ${data.weekStart}`;
-
-  try{
-    const file = new File([blob], filename, { type:'application/pdf' });
-    await navigator.share({
-      files:[file],
-      title: subject,
-      text: subject
-    });
-    statusMsg.textContent = 'PDF shared — pick your email app and add the recipient there.';
-    statusMsg.classList.add('show');
-  }catch(e){
-    // user cancelled the share sheet — no action needed
   }
 });
 </script>
