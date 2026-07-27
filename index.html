@@ -326,9 +326,6 @@
 
   <div class="card">
     <h2>Submit</h2>
-    <label class="req">Send To (Supervisor Email)</label>
-    <input type="email" id="supervisorEmail" placeholder="supervisor@medprorespiratory.com">
-
     <label>Submitted By</label>
     <input type="text" id="submittedBy" placeholder="Your name">
 
@@ -337,8 +334,20 @@
 
     <button id="submitBtn" type="button">Generate PDF &amp; Email via Outlook</button>
     <button id="shareBtn" type="button" style="display:none;">Or Share PDF to an App Instead</button>
-    <div class="hint" style="margin-top:8px;">The main button saves the PDF and opens a new email addressed to Send To — attach the saved PDF before sending. "Share" hands the PDF file directly to an app of your choice (you'll enter the recipient there).</div>
+    <div class="hint" style="margin-top:8px;">The main button saves the PDF and opens a new email — attach the saved PDF before sending. "Share" hands the PDF file directly to an app of your choice.</div>
     <div id="statusMsg"></div>
+  </div>
+
+  <div class="card">
+    <h2>How to Send on iPhone (Outlook)</h2>
+    <div class="hint" style="margin:0;">
+      1. Tap <strong>Generate PDF &amp; Email via Outlook</strong> above.<br>
+      2. The PDF downloads — tap <strong>Download</strong> at the bottom of Safari, then tap the file to confirm it saved.<br>
+      3. Switch to the <strong>Outlook</strong> app (or the mail app that opens automatically) and start a new email, or continue in the email window that opened.<br>
+      4. Tap the <strong>paperclip / attach</strong> icon in the email, choose <strong>Browse Files</strong> or <strong>Recent</strong>, and select the timesheet PDF you just saved.<br>
+      5. Fill in the recipient, check the attachment is there, and hit <strong>Send</strong>.
+    </div>
+    <div class="hint" style="margin-top:10px;">Tip: tap <strong>Or Share PDF to an App Instead</strong> to skip the download step — pick Outlook straight from the share sheet and the PDF attaches automatically; you'll just need to add the recipient yourself.</div>
   </div>
 
 </main>
@@ -568,12 +577,8 @@ recalc();
 // today's date default
 document.getElementById('submitDate').valueAsDate = new Date();
 
-// Remember supervisor email + employee name on this device
+// Remember employee name on this device
 async function loadSaved(){
-  try{
-    const email = await window.storage.get('supervisorEmail');
-    if(email) document.getElementById('supervisorEmail').value = email.value;
-  }catch(e){}
   try{
     const name = await window.storage.get('empName');
     if(name){
@@ -743,7 +748,14 @@ function buildTimesheetPDF(data){
   doc.text(`Week Total: ${data.mWeekTotal} km`, 360, y);
   if(data.yearTotalKm){ y += 16; doc.text(`Year Total: ${data.yearTotalKm} km`, marginX, y); }
 
-  y += 40;
+  y += 30;
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(11);
+  doc.setTextColor(28,39,51);
+  doc.text(data.submittedBy || '—', marginX, y);
+  doc.text(data.submitDate || '—', 320, y);
+
+  y += 6;
   doc.setDrawColor(21,58,107);
   doc.line(marginX, y, marginX+180, y);
   doc.line(320, y, 320+120, y);
@@ -752,7 +764,7 @@ function buildTimesheetPDF(data){
   doc.setFontSize(9);
   doc.setTextColor(102,116,138);
   doc.text('Submitted By', marginX, y);
-  doc.text(`Date: ${data.submitDate || ''}`, 320, y);
+  doc.text('Date', 320, y);
 
   return doc;
 }
@@ -826,17 +838,15 @@ if(navigator.canShare && navigator.canShare({ files:[new File([new Blob(['x'])],
 
 document.getElementById('submitBtn').addEventListener('click', async () => {
   const data = gatherTimesheetData();
-  const supervisorEmail = document.getElementById('supervisorEmail').value.trim();
   const statusMsg = document.getElementById('statusMsg');
 
-  if(!data.empName || !data.weekStart || !data.weekEnd || !supervisorEmail){
-    statusMsg.textContent = 'Please fill in Employee Name, Week Of, and Supervisor Email before submitting.';
+  if(!data.empName || !data.weekStart || !data.weekEnd){
+    statusMsg.textContent = 'Please fill in Employee Name and Week Of before submitting.';
     statusMsg.classList.add('show');
     return;
   }
 
   try{
-    await window.storage.set('supervisorEmail', supervisorEmail);
     await window.storage.set('empName', data.empName);
   }catch(e){}
 
@@ -858,13 +868,14 @@ document.getElementById('submitBtn').addEventListener('click', async () => {
   // Always save the PDF first — this is what gets attached manually.
   downloadBlob(blob, filename);
 
-  // Always open a mailto: so the Send To recipient is actually used. This opens
-  // whichever app is set as the device's default mail handler — set Outlook as
-  // your default mail app (in Windows/iOS/Android Settings) so this opens Outlook.
-  const mailto = `mailto:${encodeURIComponent(supervisorEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(`Hi,\n\nPlease see the attached time sheet PDF (saved as "${filename}" to your Downloads/Files) — attach it here before sending.\n\nThanks,\n${data.submittedBy}`)}`;
+  // Open a mailto: with subject/body pre-filled (no recipient — add that in the
+  // email itself). This opens whichever app is set as the device's default mail
+  // handler — set Outlook as your default mail app (in Windows/iOS/Android
+  // Settings) so this opens Outlook.
+  const mailto = `mailto:?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(`Hi,\n\nPlease see the attached time sheet PDF (saved as "${filename}" to your Downloads/Files) — attach it here before sending.\n\nThanks,\n${data.submittedBy}`)}`;
   setTimeout(()=>{ window.location.href = mailto; }, 400);
 
-  statusMsg.textContent = `Saved ${filename}. Opening your default mail app addressed to ${supervisorEmail} — attach the file before sending.`;
+  statusMsg.textContent = `Saved ${filename}. Opening your default mail app — attach the file and add the recipient before sending.`;
 });
 
 document.getElementById('shareBtn').addEventListener('click', async () => {
