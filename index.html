@@ -1,0 +1,908 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1">
+<title>MedPro Employee Time Sheet</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root{
+    --navy:#153a6b;
+    --navy-dark:#0e2a4e;
+    --green:#4caa3f;
+    --green-dark:#3d8a33;
+    --bg:#f4f6f8;
+    --card:#ffffff;
+    --line:#dde3e9;
+    --text:#1c2733;
+    --muted:#66748a;
+    --danger:#c0392b;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    padding-bottom:48px;
+  }
+  header{
+    background:linear-gradient(135deg,var(--navy) 0%,var(--navy-dark) 100%);
+    color:#fff;
+    padding:20px 18px 22px;
+    border-bottom:4px solid var(--green);
+  }
+  header .brand{
+    font-size:22px;
+    font-weight:800;
+    letter-spacing:0.3px;
+  }
+  header .brand span{color:var(--green);}
+  header .sub{
+    font-size:13px;
+    opacity:0.85;
+    margin-top:2px;
+  }
+  main{
+    max-width:640px;
+    margin:0 auto;
+    padding:14px;
+  }
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:16px;
+    margin-bottom:14px;
+    box-shadow:0 1px 2px rgba(20,40,70,0.04);
+  }
+  .card h2{
+    font-size:14px;
+    text-transform:uppercase;
+    letter-spacing:0.6px;
+    color:var(--navy);
+    margin:0 0 12px;
+    padding-bottom:8px;
+    border-bottom:2px solid var(--bg);
+  }
+  label{
+    display:block;
+    font-size:12.5px;
+    font-weight:600;
+    color:var(--muted);
+    margin-bottom:4px;
+  }
+  input[type=text],input[type=email],input[type=date],input[type=number],input[type=time],select,textarea{
+    width:100%;
+    padding:10px 11px;
+    font-size:16px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    background:#fbfcfd;
+    color:var(--text);
+    margin-bottom:12px;
+  }
+  input:focus,textarea:focus{
+    outline:2px solid var(--green);
+    outline-offset:1px;
+    background:#fff;
+  }
+  .row2{display:flex;gap:10px;}
+  .row2 > div{flex:1;min-width:0;}
+  .checkrow{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px;
+    border:1px solid var(--line);
+    border-radius:8px;
+    margin-bottom:10px;
+    background:#fbfcfd;
+  }
+  .checkrow input{width:20px;height:20px;margin:0;flex:none;}
+  .checkrow span{font-size:14px;font-weight:600;}
+  .day-card{
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:12px;
+    margin-bottom:10px;
+    background:#fbfcfd;
+  }
+  .day-card .day-title{
+    font-weight:700;
+    color:var(--navy);
+    font-size:14.5px;
+    margin-bottom:8px;
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+  }
+  .day-card .ot-flag{
+    font-size:11px;
+    font-weight:700;
+    color:#fff;
+    background:var(--danger);
+    padding:2px 8px;
+    border-radius:20px;
+    display:none;
+  }
+  .day-card .ot-flag.show{display:inline-block;}
+  .day-card .off-flag{
+    font-size:11px;
+    font-weight:700;
+    color:var(--navy);
+    background:var(--line);
+    padding:2px 8px;
+    border-radius:20px;
+    display:none;
+    margin-right:6px;
+  }
+  .day-card .off-flag.show{display:inline-block;}
+  .day-card.off-day{opacity:0.85;}
+  .row3{display:flex;gap:10px;}
+  .row3 > div{flex:1;min-width:0;}
+  .miles-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0 10px;
+  }
+  .summary-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+  }
+  .summary-grid.three-col{
+    grid-template-columns:1fr 1fr 1fr;
+  }
+  .stat{
+    background:var(--bg);
+    border-radius:8px;
+    padding:10px 12px;
+    text-align:center;
+  }
+  .stat .num{font-size:20px;font-weight:800;color:var(--navy);}
+  .stat.alert .num{color:var(--danger);}
+  .stat .lbl{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;margin-top:2px;}
+  input:disabled{
+    background:#eef1f4;
+    color:var(--muted);
+    cursor:not-allowed;
+  }
+  .readonly{
+    background:#eef1f4 !important;
+    color:var(--navy);
+    font-weight:700;
+  }
+  .hint{
+    font-size:12px;
+    color:var(--muted);
+    margin:-6px 0 12px;
+    line-height:1.4;
+  }
+  button#submitBtn{
+    width:100%;
+    padding:16px;
+    font-size:16px;
+    font-weight:700;
+    color:#fff;
+    background:var(--green);
+    border:none;
+    border-radius:10px;
+    letter-spacing:0.3px;
+  }
+  button#submitBtn:active{background:var(--green-dark);}
+  button#shareBtn{
+    width:100%;
+    padding:13px;
+    font-size:14px;
+    font-weight:600;
+    color:var(--navy);
+    background:#fff;
+    border:1.5px solid var(--navy);
+    border-radius:10px;
+    margin-top:10px;
+  }
+  button#shareBtn:active{background:var(--bg);}
+  #statusMsg{
+    text-align:center;
+    font-size:13px;
+    color:var(--muted);
+    margin-top:10px;
+    display:none;
+  }
+  #statusMsg.show{display:block;}
+  .req::after{content:" *";color:var(--danger);}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">MedPro <span>Respiratory Care</span></div>
+  <div class="sub">Employee Time Sheet — mobile submission</div>
+</header>
+
+<main>
+
+  <div class="card">
+    <h2>Employee &amp; Week</h2>
+    <label class="req">Employee Name</label>
+    <input type="text" id="empName" placeholder="Full name">
+
+    <div class="row2">
+      <div>
+        <label class="req">Start of Week</label>
+        <input type="date" id="weekStart">
+        <div class="hint" style="margin-top:-8px;">Must be a Sunday — will auto-adjust if not.</div>
+      </div>
+      <div>
+        <label>Week Ends</label>
+        <input type="date" id="weekEnd" class="readonly" readonly>
+      </div>
+    </div>
+
+    <div class="checkrow">
+      <input type="checkbox" id="onCallStandard">
+      <span>On-Call Week — Standard</span>
+    </div>
+    <div class="checkrow">
+      <input type="checkbox" id="onCallStat">
+      <span>On-Call Week — Stat</span>
+    </div>
+    <div class="row2">
+      <div>
+        <label id="onCallStartLabel">On-Call Week Start</label>
+        <input type="date" id="onCallStart" disabled>
+        <div class="hint" style="margin-top:-8px;">Must be a Friday — will auto-adjust if not. Select On-Call Standard or Stat above to enable.</div>
+      </div>
+      <div>
+        <label>On-Call Week Ends</label>
+        <input type="date" id="onCallEnd" class="readonly" readonly>
+      </div>
+    </div>
+
+    <label>Regular Work Week</label>
+    <select id="workWeek">
+      <option value="mon-fri">Monday – Friday</option>
+      <option value="tue-sat">Tuesday – Saturday</option>
+      <option value="sun-thu">Sunday – Thursday</option>
+      <option value="wed-sun">Wednesday – Sunday</option>
+      <option value="hourly">Hourly (enter hours each day)</option>
+    </select>
+  </div>
+
+  <div class="card">
+    <h2>Daily Hours</h2>
+    <div class="hint">Enter total hours worked each day. Scheduled day is 7.5 hrs. Overtime is calculated automatically for any hours over 8 in a day, or over 40 regular hours for the week.</div>
+    <div id="daysContainer"></div>
+
+    <div class="summary-grid three-col" style="margin-top:4px;">
+      <div class="stat"><div class="num" id="totalHoursOut">0.0</div><div class="lbl">Total Hours</div></div>
+      <div class="stat"><div class="num" id="totalRegOut">0.0</div><div class="lbl">Total Regular</div></div>
+      <div class="stat alert"><div class="num" id="totalOTOut">0.0</div><div class="lbl">Total OT Hours</div></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Employee Overtime</h2>
+    <div class="row2">
+      <div>
+        <label>OT Worked This Week</label>
+        <input type="number" id="otWorked" class="readonly" readonly>
+      </div>
+      <div>
+        <label>OT Rolled Over (Previous Weeks)</label>
+        <input type="number" step="0.25" id="otRolled" placeholder="0">
+      </div>
+    </div>
+    <div class="row2">
+      <div>
+        <label>OT Used This Week</label>
+        <input type="number" step="0.25" id="otUsed" placeholder="0">
+      </div>
+      <div>
+        <label>Total Balance OT Hours</label>
+        <input type="number" id="otBalance" class="readonly" readonly>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Mileage Sheet</h2>
+    <div class="hint">Optional — fill in only for days with business travel.</div>
+    <div id="mileageContainer"></div>
+
+    <div class="summary-grid">
+      <div class="stat"><div class="num" id="mBusOut">0</div><div class="lbl">Total Business KM</div></div>
+      <div class="stat"><div class="num" id="mPerOut">0</div><div class="lbl">Total Personal KM</div></div>
+    </div>
+    <div class="summary-grid" style="margin-top:10px;">
+      <div class="stat"><div class="num" id="mWeekOut">0</div><div class="lbl">Total Week KM</div></div>
+      <div class="stat">
+        <input type="number" step="1" id="yearTotalKm" placeholder="0" style="text-align:center;font-weight:800;color:var(--navy);margin-bottom:0;border:none;background:transparent;padding:0;">
+        <div class="lbl">Year Total KM (optional)</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>Submit</h2>
+    <label class="req">Send To (Supervisor Email)</label>
+    <input type="email" id="supervisorEmail" placeholder="supervisor@medprorespiratory.com">
+
+    <label>Submitted By</label>
+    <input type="text" id="submittedBy" placeholder="Your name">
+
+    <label>Date</label>
+    <input type="date" id="submitDate">
+
+    <button id="submitBtn" type="button">Generate PDF &amp; Email via Outlook</button>
+    <button id="shareBtn" type="button" style="display:none;">Or Share PDF to an App Instead</button>
+    <div class="hint" style="margin-top:8px;">The main button saves the PDF and opens a new email addressed to Send To — attach the saved PDF before sending. "Share" hands the PDF file directly to an app of your choice (you'll enter the recipient there).</div>
+    <div id="statusMsg"></div>
+  </div>
+
+</main>
+
+<script>
+const DAYS = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Saturday"];
+const STANDARD_DAY = 7.5;
+const DAILY_OT_THRESHOLD = 8;
+const WEEKLY_REGULAR_CAP = 40;
+
+const daysContainer = document.getElementById('daysContainer');
+const mileageContainer = document.getElementById('mileageContainer');
+
+DAYS.forEach((day, i) => {
+  const card = document.createElement('div');
+  card.className = 'day-card';
+  card.innerHTML = `
+    <div class="day-title">
+      <span>${day}</span>
+      <span><span class="off-flag" id="offFlag${i}">Day Off</span><span class="ot-flag" id="otFlag${i}">OT</span></span>
+    </div>
+    <div class="row3">
+      <div>
+        <label>Hours Worked</label>
+        <input type="number" step="0.25" min="0" max="24" placeholder="${STANDARD_DAY}" id="hours${i}">
+      </div>
+      <div>
+        <label>Regular Hours</label>
+        <input type="number" id="reg${i}" class="readonly" readonly>
+      </div>
+      <div>
+        <label>OT Hours</label>
+        <input type="number" id="ot${i}" class="readonly" readonly>
+      </div>
+    </div>
+    <label>Reason for OT / Client Seen</label>
+    <textarea rows="2" id="reason${i}" placeholder="Optional"></textarea>
+  `;
+  daysContainer.appendChild(card);
+
+  const mCard = document.createElement('div');
+  mCard.className = 'day-card';
+  mCard.innerHTML = `
+    <div class="day-title"><span>${day}</span></div>
+    <div class="row2">
+      <div><label>Start Time</label><input type="time" id="mStart${i}"></div>
+      <div><label>End Time</label><input type="time" id="mEnd${i}"></div>
+    </div>
+    <div class="row2">
+      <div><label>Business KM</label><input type="number" step="1" min="0" id="mBus${i}" placeholder="0"></div>
+      <div><label>Personal KM</label><input type="number" step="1" min="0" id="mPer${i}" placeholder="0"></div>
+    </div>
+  `;
+  mileageContainer.appendChild(mCard);
+});
+
+function num(v){ const n = parseFloat(v); return isNaN(n) ? 0 : n; }
+
+function snapToWeekday(dateStr, targetDow){
+  if(!dateStr) return dateStr;
+  const d = new Date(dateStr+'T00:00:00');
+  const diff = (d.getDay() - targetDow + 7) % 7;
+  d.setDate(d.getDate() - diff);
+  return d.toISOString().split('T')[0];
+}
+function addDays(dateStr, days){
+  const d = new Date(dateStr+'T00:00:00');
+  d.setDate(d.getDate() + days);
+  return d.toISOString().split('T')[0];
+}
+
+const weekStartEl = document.getElementById('weekStart');
+const weekEndEl = document.getElementById('weekEnd');
+weekStartEl.addEventListener('change', () => {
+  const raw = weekStartEl.value;
+  if(!raw){ weekEndEl.value = ''; return; }
+  const corrected = snapToWeekday(raw, 0); // Sunday
+  // Defer the correction a tick so mobile native date pickers (esp. iOS Safari)
+  // actually re-render the field instead of visually sticking on the tapped date.
+  setTimeout(() => {
+    weekStartEl.value = corrected;
+    weekEndEl.value = addDays(corrected, 6); // Saturday
+    weekStartEl.blur();
+  }, 0);
+});
+
+const onCallStartEl = document.getElementById('onCallStart');
+const onCallEndEl = document.getElementById('onCallEnd');
+const onCallStandardEl = document.getElementById('onCallStandard');
+const onCallStatEl = document.getElementById('onCallStat');
+
+function updateOnCallEnabled(){
+  const enabled = onCallStandardEl.checked || onCallStatEl.checked;
+  onCallStartEl.disabled = !enabled;
+  if(!enabled){
+    onCallStartEl.value = '';
+    onCallEndEl.value = '';
+  }
+}
+onCallStandardEl.addEventListener('change', updateOnCallEnabled);
+onCallStatEl.addEventListener('change', updateOnCallEnabled);
+updateOnCallEnabled();
+
+onCallStartEl.addEventListener('change', () => {
+  const raw = onCallStartEl.value;
+  if(!raw){ onCallEndEl.value = ''; return; }
+  const corrected = snapToWeekday(raw, 5); // Friday
+  setTimeout(() => {
+    onCallStartEl.value = corrected;
+    onCallEndEl.value = addDays(corrected, 7); // following Friday
+    onCallStartEl.blur();
+  }, 0);
+});
+
+const WORK_WEEKS = {
+  'mon-fri': [1,2,3,4,5],
+  'tue-sat': [2,3,4,5,6],
+  'sun-thu': [0,1,2,3,4],
+  'wed-sun': [3,4,5,6,0]
+};
+
+function updateOffDays(){
+  const mode = document.getElementById('workWeek').value;
+
+  if(mode === 'hourly'){
+    for(let i=0;i<7;i++){
+      const hoursInput = document.getElementById('hours'+i);
+      const card = hoursInput.closest('.day-card');
+      const flag = document.getElementById('offFlag'+i);
+      card.classList.remove('off-day');
+      flag.classList.remove('show');
+      hoursInput.placeholder = '0';
+      hoursInput.value = '';
+    }
+    recalc();
+    return;
+  }
+
+  const regularDays = WORK_WEEKS[mode];
+  for(let i=0;i<7;i++){
+    const isOff = !regularDays.includes(i);
+    const hoursInput = document.getElementById('hours'+i);
+    const card = hoursInput.closest('.day-card');
+    const flag = document.getElementById('offFlag'+i);
+    if(isOff){
+      card.classList.add('off-day');
+      flag.classList.add('show');
+      hoursInput.placeholder = '0';
+      hoursInput.value = '';
+    }else{
+      card.classList.remove('off-day');
+      flag.classList.remove('show');
+      hoursInput.placeholder = STANDARD_DAY;
+      hoursInput.value = STANDARD_DAY;
+    }
+  }
+  recalc();
+}
+document.getElementById('workWeek').addEventListener('change', updateOffDays);
+updateOffDays();
+
+function recalc(){
+  let dailyOTs = [];
+  let dailyRegs = [];
+  let totalHours = 0;
+
+  for(let i=0;i<7;i++){
+    const h = num(document.getElementById('hours'+i).value);
+    const dOT = h > DAILY_OT_THRESHOLD ? (h - DAILY_OT_THRESHOLD) : 0;
+    const dReg = h - dOT;
+    dailyOTs.push(dOT);
+    dailyRegs.push(dReg);
+    totalHours += h;
+
+    const flag = document.getElementById('otFlag'+i);
+    if(dOT > 0) flag.classList.add('show'); else flag.classList.remove('show');
+  }
+
+  let weeklyRegTotal = dailyRegs.reduce((a,b)=>a+b,0);
+  let weeklyExcess = weeklyRegTotal > WEEKLY_REGULAR_CAP ? (weeklyRegTotal - WEEKLY_REGULAR_CAP) : 0;
+
+  // Distribute the weekly excess as OT starting from the last days worked backward,
+  // taken only from each day's regular (non-daily-OT) portion.
+  let remainingExcess = weeklyExcess;
+  for(let i=6;i>=0 && remainingExcess>0;i--){
+    const take = Math.min(dailyRegs[i], remainingExcess);
+    dailyOTs[i] += take;
+    remainingExcess -= take;
+  }
+
+  let totalOT = 0;
+  for(let i=0;i<7;i++){
+    const h = num(document.getElementById('hours'+i).value);
+    const regHours = h - dailyOTs[i];
+    document.getElementById('ot'+i).value = dailyOTs[i] > 0 ? dailyOTs[i].toFixed(2) : (h>0 ? '0.00' : '');
+    document.getElementById('reg'+i).value = h > 0 ? regHours.toFixed(2) : '';
+    totalOT += dailyOTs[i];
+    if(dailyOTs[i] > 0) document.getElementById('otFlag'+i).classList.add('show');
+    else document.getElementById('otFlag'+i).classList.remove('show');
+  }
+
+  document.getElementById('totalHoursOut').textContent = totalHours.toFixed(2);
+  document.getElementById('totalRegOut').textContent = (totalHours - totalOT).toFixed(2);
+  document.getElementById('totalOTOut').textContent = totalOT.toFixed(2);
+  document.getElementById('otWorked').value = totalOT.toFixed(2);
+
+  const rolled = num(document.getElementById('otRolled').value);
+  const used = num(document.getElementById('otUsed').value);
+  const balance = rolled + totalOT - used;
+  document.getElementById('otBalance').value = balance.toFixed(2);
+
+  let mBusTotal=0, mPerTotal=0;
+  for(let i=0;i<7;i++){
+    mBusTotal += num(document.getElementById('mBus'+i).value);
+    mPerTotal += num(document.getElementById('mPer'+i).value);
+  }
+  document.getElementById('mBusOut').textContent = mBusTotal.toFixed(0);
+  document.getElementById('mPerOut').textContent = mPerTotal.toFixed(0);
+  document.getElementById('mWeekOut').textContent = (mBusTotal+mPerTotal).toFixed(0);
+}
+
+document.querySelectorAll('input, textarea').forEach(el=>{
+  el.addEventListener('input', recalc);
+});
+recalc();
+
+// today's date default
+document.getElementById('submitDate').valueAsDate = new Date();
+
+// Remember supervisor email + employee name on this device
+async function loadSaved(){
+  try{
+    const email = await window.storage.get('supervisorEmail');
+    if(email) document.getElementById('supervisorEmail').value = email.value;
+  }catch(e){}
+  try{
+    const name = await window.storage.get('empName');
+    if(name){
+      document.getElementById('empName').value = name.value;
+      document.getElementById('submittedBy').value = name.value;
+    }
+  }catch(e){}
+}
+loadSaved();
+
+function buildTimesheetPDF(data){
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ unit:'pt', format:'letter' });
+  const marginX = 40;
+  const pageWidth = 612;
+  const usableWidth = pageWidth - marginX*2;
+  let y = 0;
+
+  // Header band
+  doc.setFillColor(21,58,107);
+  doc.rect(0,0,pageWidth,60,'F');
+  doc.setFillColor(76,170,63);
+  doc.rect(0,60,pageWidth,4,'F');
+  doc.setTextColor(255,255,255);
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(16);
+  doc.text('MedPro Respiratory Care', marginX, 28);
+  doc.setFontSize(11);
+  doc.setFont('helvetica','normal');
+  doc.text('Employee Time Sheet', marginX, 46);
+
+  doc.setTextColor(28,39,51);
+  y = 90;
+
+  function label(text, x, yy){
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(9);
+    doc.setTextColor(102,116,138);
+    doc.text(text.toUpperCase(), x, yy);
+  }
+  function value(text, x, yy){
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(11);
+    doc.setTextColor(28,39,51);
+    doc.text(String(text || '—'), x, yy+14);
+  }
+
+  label('Employee', marginX, y);
+  value(data.empName, marginX, y);
+  label('Week', 320, y);
+  value(`${data.weekStart}  to  ${data.weekEnd}`, 320, y);
+  y += 30;
+
+  label('Regular Work Week', marginX, y);
+  value(data.workWeekLabel, marginX, y);
+  label('Submitted By', 320, y);
+  value(data.submittedBy, 320, y);
+  y += 30;
+
+  if(data.onCallStandard || data.onCallStat){
+    label('On-Call Week', marginX, y);
+    const kind = data.onCallStandard ? 'Standard' : 'Stat';
+    value(`${kind}: ${data.onCallStart || '—'} to ${data.onCallEnd || '—'}`, marginX, y);
+    y += 30;
+  }
+
+  y += 6;
+  doc.setDrawColor(221,227,233);
+  doc.line(marginX, y, pageWidth-marginX, y);
+  y += 22;
+
+  // Daily hours table
+  function drawTableHeader(cols, yy){
+    doc.setFillColor(238,241,244);
+    doc.rect(marginX, yy-13, usableWidth, 18, 'F');
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(9);
+    doc.setTextColor(21,58,107);
+    let cx = marginX+4;
+    cols.forEach(c=>{ doc.text(c.title, cx, yy); cx += c.width; });
+    return yy+14;
+  }
+
+  const dayCols = [
+    {title:'DAY', width:65},
+    {title:'HOURS', width:55},
+    {title:'REGULAR', width:60},
+    {title:'OT', width:45},
+    {title:'REASON / CLIENT SEEN', width:usableWidth-65-55-60-45}
+  ];
+  y = drawTableHeader(dayCols, y);
+
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(9.5);
+  data.days.forEach(d=>{
+    const reasonLines = doc.splitTextToSize(d.reason || '', dayCols[4].width-6);
+    const rowH = Math.max(16, 12*reasonLines.length + 4);
+    let cx = marginX+4;
+    doc.setTextColor(28,39,51);
+    doc.text(d.name, cx, y); cx += dayCols[0].width;
+    doc.text(d.hours, cx, y); cx += dayCols[1].width;
+    doc.text(d.regular, cx, y); cx += dayCols[2].width;
+    if(parseFloat(d.ot) > 0){ doc.setTextColor(192,57,43); doc.setFont('helvetica','bold'); }
+    doc.text(d.ot, cx, y);
+    doc.setFont('helvetica','normal'); doc.setTextColor(28,39,51);
+    cx += dayCols[3].width;
+    doc.text(reasonLines, cx, y);
+    y += rowH;
+    doc.setDrawColor(238,241,244);
+    doc.line(marginX, y-rowH+ (rowH-8), pageWidth-marginX, y-rowH+(rowH-8));
+  });
+
+  y += 6;
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(10);
+  doc.text(`Total Hours: ${data.totalHours}`, marginX, y);
+  doc.text(`Total Regular: ${data.totalRegular}`, 170, y);
+  doc.setTextColor(192,57,43);
+  doc.text(`Total OT Hours: ${data.totalOT}`, 320, y);
+  doc.setTextColor(28,39,51);
+  y += 26;
+
+  // Employee overtime table
+  label('Employee Overtime', marginX, y); y += 16;
+  const otCols = [
+    {title:'OT WORKED THIS WK', width:135},
+    {title:'ROLLED OVER', width:135},
+    {title:'USED THIS WEEK', width:135},
+    {title:'BALANCE', width:usableWidth-135-135-135}
+  ];
+  y = drawTableHeader(otCols, y);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(10);
+  let cx = marginX+4;
+  [data.otWorked, data.otRolled, data.otUsed, data.otBalance].forEach((v,i)=>{
+    doc.text(String(v), cx, y);
+    cx += otCols[i].width;
+  });
+  y += 30;
+
+  // Mileage table
+  label('Mileage Sheet', marginX, y); y += 16;
+  const mCols = [
+    {title:'DAY', width:65},
+    {title:'START', width:70},
+    {title:'END', width:70},
+    {title:'BUSINESS KM', width:90},
+    {title:'PERSONAL KM', width:usableWidth-65-70-70-90}
+  ];
+  y = drawTableHeader(mCols, y);
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(9.5);
+  data.mileage.forEach(m=>{
+    let mcx = marginX+4;
+    doc.text(m.name, mcx, y); mcx += mCols[0].width;
+    doc.text(m.start || '--', mcx, y); mcx += mCols[1].width;
+    doc.text(m.end || '--', mcx, y); mcx += mCols[2].width;
+    doc.text(m.bus, mcx, y); mcx += mCols[3].width;
+    doc.text(m.per, mcx, y);
+    y += 16;
+  });
+  y += 8;
+  doc.setFont('helvetica','bold');
+  doc.setFontSize(10);
+  doc.text(`Business: ${data.mBusTotal} km`, marginX, y);
+  doc.text(`Personal: ${data.mPerTotal} km`, 200, y);
+  doc.text(`Week Total: ${data.mWeekTotal} km`, 360, y);
+  if(data.yearTotalKm){ y += 16; doc.text(`Year Total: ${data.yearTotalKm} km`, marginX, y); }
+
+  y += 40;
+  doc.setDrawColor(21,58,107);
+  doc.line(marginX, y, marginX+180, y);
+  doc.line(320, y, 320+120, y);
+  y += 12;
+  doc.setFont('helvetica','normal');
+  doc.setFontSize(9);
+  doc.setTextColor(102,116,138);
+  doc.text('Submitted By', marginX, y);
+  doc.text(`Date: ${data.submitDate || ''}`, 320, y);
+
+  return doc;
+}
+
+function gatherTimesheetData(){
+  const empName = document.getElementById('empName').value.trim();
+  const weekStart = document.getElementById('weekStart').value;
+  const weekEnd = document.getElementById('weekEnd').value;
+
+  const days = [];
+  for(let i=0;i<7;i++){
+    days.push({
+      name: DAYS[i],
+      hours: document.getElementById('hours'+i).value || '0',
+      regular: document.getElementById('reg'+i).value || '0',
+      ot: document.getElementById('ot'+i).value || '0',
+      reason: document.getElementById('reason'+i).value.trim()
+    });
+  }
+  const mileage = [];
+  for(let i=0;i<7;i++){
+    mileage.push({
+      name: DAYS[i],
+      start: document.getElementById('mStart'+i).value,
+      end: document.getElementById('mEnd'+i).value,
+      bus: document.getElementById('mBus'+i).value || '0',
+      per: document.getElementById('mPer'+i).value || '0'
+    });
+  }
+
+  return {
+    empName, weekStart, weekEnd,
+    onCallStandard: document.getElementById('onCallStandard').checked,
+    onCallStat: document.getElementById('onCallStat').checked,
+    onCallStart: document.getElementById('onCallStart').value,
+    onCallEnd: document.getElementById('onCallEnd').value,
+    workWeekLabel: document.getElementById('workWeek').selectedOptions[0].text,
+    days,
+    totalHours: document.getElementById('totalHoursOut').textContent,
+    totalRegular: document.getElementById('totalRegOut').textContent,
+    totalOT: document.getElementById('totalOTOut').textContent,
+    otWorked: document.getElementById('otWorked').value,
+    otRolled: document.getElementById('otRolled').value || '0',
+    otUsed: document.getElementById('otUsed').value || '0',
+    otBalance: document.getElementById('otBalance').value,
+    mileage,
+    mBusTotal: document.getElementById('mBusOut').textContent,
+    mPerTotal: document.getElementById('mPerOut').textContent,
+    mWeekTotal: document.getElementById('mWeekOut').textContent,
+    yearTotalKm: document.getElementById('yearTotalKm').value,
+    submittedBy: document.getElementById('submittedBy').value || empName,
+    submitDate: document.getElementById('submitDate').value
+  };
+}
+
+function downloadBlob(blob, filename){
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(()=>URL.revokeObjectURL(url), 4000);
+}
+
+// Show the Share button only on browsers/devices that actually support sharing files.
+if(navigator.canShare && navigator.canShare({ files:[new File([new Blob(['x'])], 'x.pdf', {type:'application/pdf'})] })){
+  document.getElementById('shareBtn').style.display = 'block';
+}
+
+document.getElementById('submitBtn').addEventListener('click', async () => {
+  const data = gatherTimesheetData();
+  const supervisorEmail = document.getElementById('supervisorEmail').value.trim();
+  const statusMsg = document.getElementById('statusMsg');
+
+  if(!data.empName || !data.weekStart || !data.weekEnd || !supervisorEmail){
+    statusMsg.textContent = 'Please fill in Employee Name, Week Of, and Supervisor Email before submitting.';
+    statusMsg.classList.add('show');
+    return;
+  }
+
+  try{
+    await window.storage.set('supervisorEmail', supervisorEmail);
+    await window.storage.set('empName', data.empName);
+  }catch(e){}
+
+  statusMsg.textContent = 'Building PDF...';
+  statusMsg.classList.add('show');
+
+  let doc;
+  try{
+    doc = buildTimesheetPDF(data);
+  }catch(e){
+    statusMsg.textContent = 'Could not generate the PDF. Please try again.';
+    return;
+  }
+
+  const filename = `Timesheet_${data.empName.replace(/\s+/g,'_')}_${data.weekStart}.pdf`;
+  const blob = doc.output('blob');
+  const subject = `Time Sheet - ${data.empName} - Week of ${data.weekStart}`;
+
+  // Always save the PDF first — this is what gets attached manually.
+  downloadBlob(blob, filename);
+
+  // Always open a mailto: so the Send To recipient is actually used. This opens
+  // whichever app is set as the device's default mail handler — set Outlook as
+  // your default mail app (in Windows/iOS/Android Settings) so this opens Outlook.
+  const mailto = `mailto:${encodeURIComponent(supervisorEmail)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(`Hi,\n\nPlease see the attached time sheet PDF (saved as "${filename}" to your Downloads/Files) — attach it here before sending.\n\nThanks,\n${data.submittedBy}`)}`;
+  setTimeout(()=>{ window.location.href = mailto; }, 400);
+
+  statusMsg.textContent = `Saved ${filename}. Opening your default mail app addressed to ${supervisorEmail} — attach the file before sending.`;
+});
+
+document.getElementById('shareBtn').addEventListener('click', async () => {
+  const data = gatherTimesheetData();
+  const statusMsg = document.getElementById('statusMsg');
+
+  if(!data.empName || !data.weekStart || !data.weekEnd){
+    statusMsg.textContent = 'Please fill in Employee Name and Week Of before sharing.';
+    statusMsg.classList.add('show');
+    return;
+  }
+
+  let doc;
+  try{
+    doc = buildTimesheetPDF(data);
+  }catch(e){
+    statusMsg.textContent = 'Could not generate the PDF. Please try again.';
+    return;
+  }
+
+  const filename = `Timesheet_${data.empName.replace(/\s+/g,'_')}_${data.weekStart}.pdf`;
+  const blob = doc.output('blob');
+  const subject = `Time Sheet - ${data.empName} - Week of ${data.weekStart}`;
+
+  try{
+    const file = new File([blob], filename, { type:'application/pdf' });
+    await navigator.share({
+      files:[file],
+      title: subject,
+      text: subject
+    });
+    statusMsg.textContent = 'PDF shared — pick your email app and add the recipient there.';
+    statusMsg.classList.add('show');
+  }catch(e){
+    // user cancelled the share sheet — no action needed
+  }
+});
+</script>
+
+</body>
+</html>
