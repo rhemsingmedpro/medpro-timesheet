@@ -389,7 +389,7 @@ DAYS.forEach((day, i) => {
   card.className = 'day-card';
   card.innerHTML = `
     <div class="day-title">
-      <span>${day}</span>
+      <span id="dayLabel${i}">${day}</span>
       <span><span class="off-flag" id="offFlag${i}">Day Off</span><span class="ot-flag" id="otFlag${i}">OT</span></span>
     </div>
     <div class="row3">
@@ -417,7 +417,7 @@ DAYS.forEach((day, i) => {
   const mCard = document.createElement('div');
   mCard.className = 'day-card';
   mCard.innerHTML = `
-    <div class="day-title"><span>${day}</span></div>
+    <div class="day-title"><span id="mDayLabel${i}">${day}</span></div>
     <div class="row2">
       <div><label>Start Time</label><input type="time" id="mStart${i}"></div>
       <div><label>End Time</label><input type="time" id="mEnd${i}"></div>
@@ -448,6 +448,23 @@ function friendlyDate(dateStr){
   const d = new Date(dateStr+'T00:00:00');
   return d.toLocaleDateString('en-US', { weekday:'short', month:'short', day:'numeric', year:'numeric' });
 }
+function dayLabelText(dayName, dateStr){
+  const d = new Date(dateStr+'T00:00:00');
+  const dayNum = d.getDate();
+  const month = d.toLocaleDateString('en-US', { month:'short' });
+  const year = d.getFullYear();
+  return `${dayName}  ${dayNum} ${month} ${year}`;
+}
+function updateDayLabels(){
+  const ws = weekStartEl.value;
+  for(let i=0;i<7;i++){
+    const label = document.getElementById('dayLabel'+i);
+    const mLabel = document.getElementById('mDayLabel'+i);
+    const text = ws ? dayLabelText(DAYS[i], addDays(ws, i)) : DAYS[i];
+    if(label) label.textContent = text;
+    if(mLabel) mLabel.textContent = text;
+  }
+}
 
 const weekStartEl = document.getElementById('weekStart');
 const weekEndEl = document.getElementById('weekEnd');
@@ -468,6 +485,7 @@ weekStartEl.addEventListener('change', () => {
       : `Week starts ${friendlyDate(corrected)}.`;
     weekStartConfirm.classList.toggle('adjusted', wasAdjusted);
     weekStartConfirm.classList.add('show');
+    updateDayLabels();
   }, 0);
 });
 
