@@ -315,18 +315,24 @@
 
   <div class="card">
     <h2>Mileage Sheet</h2>
-    <div class="hint">Optional — fill in only for days with business travel.</div>
-    <div id="mileageContainer"></div>
-
-    <div class="summary-grid">
-      <div class="stat"><div class="num" id="mBusOut">0</div><div class="lbl">Total Business KM</div></div>
-      <div class="stat"><div class="num" id="mPerOut">0</div><div class="lbl">Total Personal KM</div></div>
+    <div class="checkrow">
+      <input type="checkbox" id="showMileage">
+      <span>Include Mileage Sheet</span>
     </div>
-    <div class="summary-grid" style="margin-top:10px;">
-      <div class="stat"><div class="num" id="mWeekOut">0</div><div class="lbl">Total Week KM</div></div>
-      <div class="stat">
-        <input type="number" step="1" id="yearTotalKm" placeholder="0" style="text-align:center;font-weight:800;color:var(--navy);margin-bottom:0;border:none;background:transparent;padding:0;">
-        <div class="lbl">Year Total KM (optional)</div>
+    <div id="mileageBody" style="display:none;">
+      <div class="hint">Optional — fill in only for days with business travel.</div>
+      <div id="mileageContainer"></div>
+
+      <div class="summary-grid">
+        <div class="stat"><div class="num" id="mBusOut">0</div><div class="lbl">Total Business KM</div></div>
+        <div class="stat"><div class="num" id="mPerOut">0</div><div class="lbl">Total Personal KM</div></div>
+      </div>
+      <div class="summary-grid" style="margin-top:10px;">
+        <div class="stat"><div class="num" id="mWeekOut">0</div><div class="lbl">Total Week KM</div></div>
+        <div class="stat">
+          <input type="number" step="1" id="yearTotalKm" placeholder="0" style="text-align:center;font-weight:800;color:var(--navy);margin-bottom:0;border:none;background:transparent;padding:0;">
+          <div class="lbl">Year Total KM (optional)</div>
+        </div>
       </div>
     </div>
   </div>
@@ -419,10 +425,6 @@ DAYS.forEach((day, i) => {
   mCard.innerHTML = `
     <div class="day-title"><span id="mDayLabel${i}">${day}</span></div>
     <div class="row2">
-      <div><label>Start Time</label><input type="time" id="mStart${i}"></div>
-      <div><label>End Time</label><input type="time" id="mEnd${i}"></div>
-    </div>
-    <div class="row2">
       <div><label>Business KM</label><input type="number" step="1" min="0" id="mBus${i}" placeholder="0"></div>
       <div><label>Personal KM</label><input type="number" step="1" min="0" id="mPer${i}" placeholder="0"></div>
     </div>
@@ -465,6 +467,12 @@ function updateDayLabels(){
     if(mLabel) mLabel.textContent = text;
   }
 }
+
+const showMileageEl = document.getElementById('showMileage');
+const mileageBodyEl = document.getElementById('mileageBody');
+showMileageEl.addEventListener('change', () => {
+  mileageBodyEl.style.display = showMileageEl.checked ? '' : 'none';
+});
 
 const weekStartEl = document.getElementById('weekStart');
 const weekEndEl = document.getElementById('weekEnd');
@@ -739,10 +747,17 @@ function buildTimesheetPDF(data){
   y += 30;
 
   if(data.onCallStandard || data.onCallStat){
-    label('On-Call Week', marginX, y);
     const kind = data.onCallStandard ? 'Standard' : 'Stat';
+    // Highlighted box behind the on-call info to make it stand out on the PDF
+    doc.setFillColor(238,248,236);
+    doc.setDrawColor(76,170,63);
+    doc.setLineWidth(1);
+    doc.roundedRect(marginX-6, y-16, usableWidth+12, 34, 4, 4, 'FD');
+    doc.setLineWidth(0.5);
+
+    label('On-Call Week', marginX, y);
     value(`${kind}: ${data.onCallStart || '—'} to ${data.onCallEnd || '—'}`, marginX, y);
-    y += 30;
+    y += 34;
   }
 
   y += 6;
@@ -820,33 +835,39 @@ function buildTimesheetPDF(data){
   y += 30;
 
   // Mileage table
-  label('Mileage Sheet', marginX, y); y += 16;
-  const mCols = [
-    {title:'DAY', width:65},
-    {title:'START', width:70},
-    {title:'END', width:70},
-    {title:'BUSINESS KM', width:90},
-    {title:'PERSONAL KM', width:usableWidth-65-70-70-90}
-  ];
-  y = drawTableHeader(mCols, y);
-  doc.setFont('helvetica','normal');
-  doc.setFontSize(9.5);
-  data.mileage.forEach(m=>{
-    let mcx = marginX+4;
-    doc.text(m.name, mcx, y); mcx += mCols[0].width;
-    doc.text(m.start || '--', mcx, y); mcx += mCols[1].width;
-    doc.text(m.end || '--', mcx, y); mcx += mCols[2].width;
-    doc.text(m.bus, mcx, y); mcx += mCols[3].width;
-    doc.text(m.per, mcx, y);
-    y += 16;
-  });
-  y += 8;
-  doc.setFont('helvetica','bold');
-  doc.setFontSize(10);
-  doc.text(`Business: ${data.mBusTotal} km`, marginX, y);
-  doc.text(`Personal: ${data.mPerTotal} km`, 200, y);
-  doc.text(`Week Total: ${data.mWeekTotal} km`, 360, y);
-  if(data.yearTotalKm){ y += 16; doc.text(`Year Total: ${data.yearTotalKm} km`, marginX, y); }
+  if(data.includeMileage){
+    label('Mileage Sheet', marginX, y); y += 16;
+    const mCols = [
+      {title:'DAY', width:120},
+      {title:'BUSINESS KM', width:150},
+      {title:'PERSONAL KM', width:usableWidth-120-150}
+    ];
+    y = drawTableHeader(mCols, y);
+    doc.setFont('helvetica','normal');
+    doc.setFontSize(9.5);
+    data.mileage.forEach(m=>{
+      let mcx = marginX+4;
+      doc.text(m.name, mcx, y); mcx += mCols[0].width;
+      doc.text(m.bus, mcx, y); mcx += mCols[1].width;
+      doc.text(m.per, mcx, y);
+      y += 16;
+    });
+    y += 8;
+    doc.setFont('helvetica','bold');
+    doc.setFontSize(10);
+    const busText = `Business: ${data.mBusTotal} km`;
+    const busWidth = doc.getTextWidth(busText);
+    doc.setFillColor(238,248,236);
+    doc.setDrawColor(76,170,63);
+    doc.setLineWidth(1);
+    doc.roundedRect(marginX-6, y-12, busWidth+12, 18, 3, 3, 'FD');
+    doc.setLineWidth(0.5);
+    doc.setTextColor(28,39,51);
+    doc.text(busText, marginX, y);
+    doc.text(`Personal: ${data.mPerTotal} km`, 200, y);
+    doc.text(`Week Total: ${data.mWeekTotal} km`, 360, y);
+    if(data.yearTotalKm){ y += 16; doc.text(`Year Total: ${data.yearTotalKm} km`, marginX, y); }
+  }
 
   y += 30;
   doc.setFont('helvetica','normal');
@@ -888,8 +909,6 @@ function gatherTimesheetData(){
   for(let i=0;i<7;i++){
     mileage.push({
       name: DAYS[i],
-      start: document.getElementById('mStart'+i).value,
-      end: document.getElementById('mEnd'+i).value,
       bus: document.getElementById('mBus'+i).value || '0',
       per: document.getElementById('mPer'+i).value || '0'
     });
@@ -911,6 +930,7 @@ function gatherTimesheetData(){
     otUsed: document.getElementById('otUsed').value || '0',
     otBalance: document.getElementById('otBalance').value,
     mileage,
+    includeMileage: document.getElementById('showMileage').checked,
     mBusTotal: document.getElementById('mBusOut').textContent,
     mPerTotal: document.getElementById('mPerOut').textContent,
     mWeekTotal: document.getElementById('mWeekOut').textContent,
